@@ -2,38 +2,52 @@
 
 ## Overview
 
-This repository contains trained models reported in the paper "[Quo Vadis,
-Action Recognition? A New Model and the Kinetics
-Dataset](https://arxiv.org/abs/1705.07750)" by Joao Carreira and Andrew
-Zisserman. The paper was posted on arXiv in May 2017, and will be published as a
-CVPR 2017 conference paper.
+Original implementation by the authors can be found in this [repository](https://github.com/deepmind/kinetics-i3d), together with details about the pre-processing techniques.
 
-"Quo Vadis" introduced a new architecture for video classification, the Inflated
-3D Convnet or I3D. Here we release Inception-v1 I3D models trained on the
-[Kinetics dataset](www.deepmind.com/kinetics) training split.
-
-In our paper, we reported state-of-the-art results on the UCF101 and HMDB51
-datasets from fine-tuning these models. I3D models pre-trained on Kinetics also
-placed first in the CVPR 2017 [Charades
-challenge](http://vuchallenge.org/charades.html).
-
-The repository also now includes a pre-trained checkpoint using rgb inputs and trained from scratch on Kinetics-600.
-
-**NEW**: the video preprocessing we used has now been open-sourced by google. To set it up, check [these instructions in Google's MediaPipe repo](https://github.com/google/mediapipe/blob/master/mediapipe/docs/install.md).
-
-
-Disclaimer: This is not an official Google product.
 
 ## Running the code
 
 ### Setup
+clone this repository using
 
-First follow the instructions for [installing
+$ git clone https://github.com/andrewatef/kinetics-i3d
+
+## Create list files
+We use list files in ```data/ucf101/``` subdir to make the code find RGB images and flow data saved on disk. You have to adapt the list files to make sure the list files contain the right path to your data. Specifically, for RGB data, you have to update ```data/ucf101/rgb.txt```. Each line in in this file should be in the format:
+
+```dir_name_of_imgs_of_a_video /path/to/img_dir num_imgs label```
+For example, if your RGB data of UCF101 is saved in '/data/user/ucf101/rgb', and there are 13320 subdirs in this folder, each subdir contains images from a video. If in subdir v_BalanceBeam_g14_c02, there are 96 images, and the ground truth of this video is 4, then the line for this subdir is:
+
+```v_BalanceBeam_g14_c02 /data/user/ucf101/rgb/v_BalanceBeam_g14_c02 96 4```
+Similarly, update data/ucf101/flow.txt for flow data. Note: we use one file to include x and y part of flow data, so we use {：s} in each line to placehold x or y in the data path. For example, if your flow data are placed like this:
+```
+|---tvl1_flow
+|   |---x
+|   |--- y
+```
+then you can write each line in flow.txt like this:
+
+``` v_Archery_g01_c06 /data4/zhouhao/dataset/ucf101/tvl1_flow/{:s}/v_Archery_g01_c06 107 2 ```
+i.e, use {:s} replace x or y in path. If you are confused, please refer our code to see data loading details.
+
+## Train on UCF101 on RGB data and flow data
+### Finetune on split1 of RGB data of UCF101
+```
+CUDA_VISIBLE_DEVICES=0 python finetune.py ucf101 rgb 1
+```
+### Finetune on split2 of flow data of UCF101
+```
+CUDA_VISIBLE_DEVICES=0 python finetune.py ucf101 flow 2
+```
+We share our trained models on UCF101(RGB & FLOW) in GoogleDrive and BaiduDisk (password:ddar). You can download these models and put them in model folder of this repo. In this way you can skip the train commands above and directly run test in the next step.
+
+# Requirements
+
+```
+pip install -r requirements.txt
+```
 Sonnet](https://github.com/deepmind/sonnet).
 
-Then, clone this repository using
-
-`$ git clone https://github.com/deepmind/kinetics-i3d`
 
 ### Sample code
 
@@ -43,38 +57,22 @@ Run the example code using
 
 With default flags, this builds the I3D two-stream model, loads pre-trained I3D
 checkpoints into the TensorFlow session, and then passes an example video
-through the model. The example video has been preprocessed, with RGB and Flow
+through the model. The example video has been preprocessed, with RGB
 NumPy arrays provided (see more details below).
 
-The script outputs the norm of the logits tensor, as well as the top 20 Kinetics
-classes predicted by the model with their probability and logit values. Using
-the default flags, the output should resemble the following up to differences in
-numerical precision:
+The script outputs the top 5 Kinetics classes predicted by the model 
+with their probability. Using the default flags, the output should 
+resemble the following up to differences in numerical precision:
 
 ```
-Norm of logits: 138.468643
+Norm of logits: 76.697174
 
-Top classes and probabilities
-1.0 41.8137 playing cricket
-1.49716e-09 21.494 hurling (sport)
-3.84312e-10 20.1341 catching or throwing baseball
-1.54923e-10 19.2256 catching or throwing softball
-1.13602e-10 18.9154 hitting baseball
-8.80112e-11 18.6601 playing tennis
-2.44157e-11 17.3779 playing kickball
-1.15319e-11 16.6278 playing squash or racquetball
-6.13194e-12 15.9962 shooting goal (soccer)
-4.39177e-12 15.6624 hammer throw
-2.21341e-12 14.9772 golf putting
-1.63072e-12 14.6717 throwing discus
-1.54564e-12 14.6181 javelin throw
-7.66915e-13 13.9173 pumping fist
-5.19298e-13 13.5274 shot put
-4.26817e-13 13.3313 celebrating
-2.72057e-13 12.8809 applauding
-1.8357e-13 12.4875 throwing ball
-1.61348e-13 12.3585 dodgeball
-1.13884e-13 12.0101 tap dancing
+Top 5 classes and probabilities
+playing cricket        100.00%
+shooting goal (soccer) 0.00%
+hurling (sport)        0.00%
+catching or throwing softball 0.00%
+catching or throwing baseball 0.00%
 ```
 
 ### Running the test
@@ -98,35 +96,7 @@ The directory `data/checkpoints` contains the four checkpoints that were
 trained. The ones just trained on Kinetics are initialized using the default
 Sonnet / TensorFlow initializers, while the ones pre-trained on ImageNet are
 initialized by bootstrapping the filters from a 2D Inception-v1 model into 3D,
-as described in the paper. Importantly, the RGB and Flow streams are trained
-separately, each with a softmax classification loss. During test time, we
-combine the two streams by adding the logits with equal weighting, as shown in
-the `evalute_sample.py` code.
-
-We train using synchronous SGD using `tf.train.SyncReplicasOptimizer`. For each
-of the RGB and Flow streams, we aggregate across 64 replicas with 4 backup
-replicas. During training, we use 0.5 dropout and apply BatchNorm, with a
-minibatch size of 6. The optimizer used is SGD with a momentum value of 0.9, and
-we use 1e-7 weight decay. The RGB and Flow models are trained for 115k and 155k
-steps respectively, with the following learning rate schedules.
-
-RGB:
-
-*   0 - 97k: 1e-1
-*   97k - 108k: 1e-2
-*   108k - 115k: 1e-3
-
-Flow:
-
-*   0 - 97k: 1e-1
-*   97k - 104.5k: 1e-2
-*   104.5k - 115k: 1e-3
-*   115k - 140k: 1e-1
-*   140k - 150k: 1e-2
-*   150k - 155k: 1e-3
-
-This is because the Flow models were determined to require more training after
-an initial run of 115k steps.
+as described in the paper.
 
 The models are trained using the training split of Kinetics. On the Kinetics
 test set, we obtain the following top-1 / top-5 accuracy:
@@ -137,64 +107,41 @@ RGB-I3D        | 71.1 / 89.3         | 68.4 / 88.0
 Flow-I3D       | 63.4 / 84.9         | 61.5 / 83.4
 Two-Stream I3D | 74.2 / 91.3         | 71.6 / 90.0
 
-### Sample data and preprocessing
+# Sample data and preprocessing
 
-The release of the [DeepMind Kinetics dataset](www.deepmind.com/kinetics) only
-included the YouTube IDs and the start and end times of the clips. For the
-sample data here, we use a video from the UCF101 dataset, for which all the
-videos are provided in full. The video used is `v_CricketShot_g04_c01.mp4` which
-can be downloaded from the [UCF101
-website](http://crcv.ucf.edu/data/UCF101.php).
+## preprocessing
 
-Our preprocessing uses internal libraries, that have now been open-sourced [check Google's MediaPipe repo](https://github.com/google/mediapipe/blob/master/mediapipe/docs/install.md). It does the following: 
-for both streams, we sample frames at 25 frames per second. For Kinetics, we
-additionally clip the videos at the start and end times provided.
+The preprocessing file can be run using
 
-For RGB, the videos are resized preserving aspect ratio so that the smallest
-dimension is 256 pixels, with bilinear interpolation. Pixel values are then
-rescaled between -1 and 1. During training, we randomly select a 224x224 image
-crop, while during test, we select the center 224x224 image crop from the video.
-The provided `.npy` file thus has shape `(1, num_frames, 224, 224, 3)` for RGB,
-corresponding to a batch size of 1.
+`$ python preprocessing.py --video_path "Path_to the Video"  `
 
-For the Flow stream, after sampling the videos at 25 frames per second, we
-convert the videos to grayscale. We apply a TV-L1 optical flow algorithm,
-similar to [this code from
-OpenCV](http://docs.opencv.org/3.1.0/d6/d39/classcv_1_1cuda_1_1OpticalFlowDual__TVL1.html).
-Pixel values are truncated to the range [-20, 20], then rescaled between -1 and 1.
-We only use the first two output dimensions, and apply the same cropping as
-for RGB. The provided `.npy` file thus has shape `(1, num_frames, 224, 224, 2)`
-for Flow, corresponding to a batch size of 1.
+Ex: 
 
-Here are gifs showing the provided `.npy` files. From the RGB data, we added 1
-and then divided by 2 to rescale between 0 and 1. For the Flow data, we added a
-third channel of all 0, then added 0.5 to the entire array, so that results are
-also between 0 and 1.
+ `$ python preprocessing.py --video_path "VID_NaderSquat.mp4" `
 
-![See
-data/v_CricketShot_g04_c01_rgb.gif](data/v_CricketShot_g04_c01_rgb.gif "data/v_CricketShot_g04_c01_rgb.gif")
 
-![See
-data/v_CricketShot_g04_c01_flow.gif](data/v_CricketShot_g04_c01_flow.gif "data/v_CricketShot_g04_c01_flow.gif")
+This will convert the video to a numpy array in the data/ directory 
+with the name "VID_NaderSquat_rgb.npy"
 
-For additional details on preprocessing, check [this](https://github.com/google/mediapipe/blob/master/mediapipe/examples/desktop/media_sequence/kinetics_dataset.py), refer to our paper or contact
-the authors.
+## Data
 
-### Acknowledgments
+Under data/ there are 3 input videos.
+- cricket.avi
+- VID_NaderRun.mp4
+- VID_MultiAction.mp4
 
-Brian Zhang, Joao Carreira, Viorica Patraucean, Diego de Las Casas, Chloe
-Hillier, and Andrew Zisserman helped to prepare this initial release. We would
-also like to thank the teams behind the [Kinetics
-dataset](https://arxiv.org/abs/1705.06950) and the original [Inception
-paper](https://arxiv.org/abs/1409.4842) on which this architecture and code is
-based.
+And also cricket_rgb.npy
 
-### Questions and contributions
+## Test with your own video
 
-To contribute to this repository, you will first need to sign the Google
-Contributor License Agreement (CLA), provided in the CONTRIBUTING.md file. We
-will then be able to accept any pull requests, though are not currently aiming
-to expand to other trained models.
+`$ python evaluate_sample.py --video_path "Path_to the Video" `
 
-For any questions, you can contact the authors of the "Quo Vadis" paper, whose
-emails are listed in the paper.
+## Our testing results on Multia-ction videos collected from different data-sets
+
+[Output_videos](https://github.com/andrewatef/kinetics-i3d/tree/master/output_videos)
+
+### Model accuracy on multi-action videos
+
+![Model accuracy](https://github.com/andrewatef/kinetics-i3d/blob/master/updated_Graph.jpeg)
+
+ 
